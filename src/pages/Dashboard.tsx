@@ -20,9 +20,10 @@ import {
   AlertTriangle,
   Flame
 } from 'lucide-react';
+import { Roadmap } from './Roadmap';
 
 export const Dashboard: React.FC = () => {
-  const { user, skills, recommendations, roadmap, activities, addActivity } = useApp();
+  const { user, skills, recommendations, roadmap, activities, addActivity, updateProfile } = useApp();
   const navigate = useNavigate();
 
   // Mentor Chat Drawer State
@@ -36,6 +37,12 @@ export const Dashboard: React.FC = () => {
   const [isGeneratingRoadmap, setIsGeneratingRoadmap] = useState(false);
   const [generationStep, setGenerationStep] = useState(0);
   const [generationLogs, setGenerationLogs] = useState<string[]>([]);
+
+  // Re-run analysis interactive state
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [analysisStep, setAnalysisStep] = useState(0);
+  const [analysisLogs, setAnalysisLogs] = useState<string[]>([]);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   // Hover states for line chart points
   const [hoveredTrendIndex, setHoveredTrendIndex] = useState<number | null>(null);
@@ -227,11 +234,65 @@ export const Dashboard: React.FC = () => {
         clearInterval(interval);
         setTimeout(() => {
           setIsGeneratingRoadmap(false);
-          addActivity('Upskilling Roadmap Generated', 'milestone', 50);
+          addActivity('Upskilling Roadmap Generated', 'roadmap', 50);
           navigate('/roadmap');
         }, 800);
       }
     }, 450);
+  };
+
+  // Handle rerun analysis trigger with interactive diagnostic loader
+  const handleRerunAnalysis = () => {
+    if (isAnalyzing) return;
+    setIsAnalyzing(true);
+    setAnalysisStep(0);
+    setAnalysisLogs([
+      '⚡ Connecting to AI Analysis Engine...',
+    ]);
+
+    const logs = [
+      '⚡ Connecting to AI Analysis Engine...',
+      `🔍 Analyzing career pathway goal: ${user?.careerGoal || 'Solutions Architect'}...`,
+      `📊 Fetching user skills profile & identifying technical gaps for ${skills.length} technologies...`,
+      '🧠 Computing latest career readiness index & recommendation vectors...',
+      '🛠️ Syncing upskilling milestones & active roadmap status...',
+      '✅ Recalibration successful. Updating Career Readiness Score!'
+    ];
+
+    let current = 0;
+    const interval = setInterval(() => {
+      current++;
+      if (current < logs.length) {
+        setAnalysisStep(current);
+        setAnalysisLogs(prev => [...prev, logs[current]]);
+      } else {
+        clearInterval(interval);
+        setTimeout(() => {
+          setIsAnalyzing(false);
+          
+          if (user) {
+            const currentScore = user.readinessScore || 74.2;
+            const scoreIncr = parseFloat((Math.random() * 1.5 + 0.5).toFixed(1));
+            const newScore = Math.min(98.5, parseFloat((currentScore + scoreIncr).toFixed(1)));
+            const newChange = parseFloat((Math.random() * 0.8 + 0.2).toFixed(1));
+            const newHours = parseFloat((Math.min(20, (user.learningHoursWeekly || 14.2) + 0.5)).toFixed(1));
+            
+            updateProfile({
+              readinessScore: newScore,
+              readinessChange: newChange,
+              learningHoursWeekly: newHours
+            });
+
+            addActivity(`Career Gap Analysis Completed (+${scoreIncr}% Readiness Boost)`, 'roadmap', 20);
+            
+            setToastMessage(`✨ Gap Analysis complete! Your Career Readiness Score has been updated to ${newScore}%!`);
+            setTimeout(() => {
+              setToastMessage(null);
+            }, 4500);
+          }
+        }, 800);
+      }
+    }, 500);
   };
 
   // Send a message to AI Mentor Chat Drawer
@@ -300,12 +361,24 @@ export const Dashboard: React.FC = () => {
             </button>
             <button
               id="dash-rerun-analysis-btn"
-              onClick={() => {
-                addActivity('Analysis Re-run Completed', 'milestone', 20);
-              }}
-              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold rounded-lg text-xs transition-all shadow-md active:scale-95 flex items-center gap-1.5 shadow-[0_0_15px_rgba(99,102,241,0.4)]"
+              onClick={handleRerunAnalysis}
+              disabled={isAnalyzing}
+              className={`px-4 py-2 text-white font-extrabold rounded-lg text-xs transition-all shadow-md flex items-center gap-1.5 ${
+                isAnalyzing 
+                  ? 'bg-[#0f1938] border border-indigo-500/20 text-indigo-300 cursor-not-allowed' 
+                  : 'bg-indigo-600 hover:bg-indigo-500 active:scale-95 shadow-[0_0_15px_rgba(99,102,241,0.4)]'
+              }`}
             >
-              <Sparkles className="w-3.5 h-3.5 fill-indigo-200 text-indigo-100 animate-pulse" /> Re-run analysis
+              {isAnalyzing ? (
+                <>
+                  <div className="w-3.5 h-3.5 border-2 border-indigo-400/30 border-t-indigo-400 rounded-full animate-spin" />
+                  Analyzing...
+                </>
+              ) : (
+                <>
+                  <Sparkles className="w-3.5 h-3.5 fill-indigo-200 text-indigo-100 animate-pulse" /> Re-run analysis
+                </>
+              )}
             </button>
           </div>
         </div>
@@ -354,7 +427,7 @@ export const Dashboard: React.FC = () => {
               <div className="space-y-0.5">
                 <span className="text-[9px] text-slate-500 font-extrabold uppercase tracking-widest block">Hours Invested</span>
                 <div className="text-2xl sm:text-3xl font-black text-white mt-1.5 flex items-baseline gap-1">
-                  {user.hoursSpent || 0}<span className="text-xs font-bold text-slate-400 ml-0.5">h</span>
+                   {user.learningHoursWeekly || 0}<span className="text-xs font-bold text-slate-400 ml-0.5">h</span>
                 </div>
               </div>
               <div className="w-8 h-8 rounded-lg bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400">
@@ -1025,6 +1098,59 @@ export const Dashboard: React.FC = () => {
             </form>
 
           </div>
+        </div>
+      )}
+
+      {/* --- SIMULATED GAP ANALYSIS OVERLAY DIALOG --- */}
+      {isAnalyzing && (
+        <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-md z-50 flex items-center justify-center p-4">
+          <div className="bg-[#0b1329] border border-slate-800/80 rounded-2xl p-6 w-full max-w-md shadow-[0_0_50px_rgba(99,102,241,0.25)] relative overflow-hidden">
+            <div className="absolute -right-12 -top-12 w-32 h-32 bg-indigo-600/10 rounded-full blur-2xl"></div>
+            
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-9 h-9 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400">
+                <Sparkles className="w-5 h-5 animate-spin" style={{ animationDuration: '3s' }} />
+              </div>
+              <div>
+                <h3 className="text-sm font-black text-white uppercase tracking-wider">
+                  Career Gap Analyzer
+                </h3>
+                <p className="text-[10px] text-slate-500 font-semibold">Recalibrating upskilling readiness vectors</p>
+              </div>
+            </div>
+
+            {/* Live Logs console */}
+            <div className="bg-slate-950 border border-slate-800/80 rounded-xl p-4 h-48 overflow-y-auto font-mono text-[10px] text-indigo-300/90 space-y-2 mb-4 scrollbar-thin scrollbar-thumb-slate-800 scrollbar-track-slate-950">
+              {analysisLogs.map((log, index) => (
+                <p key={index} className="leading-relaxed flex items-center gap-1.5">
+                  <span className="text-slate-600 select-none">›</span> {log}
+                </p>
+              ))}
+              <div className="w-1.5 h-3.5 bg-indigo-400 animate-pulse inline-block ml-0.5"></div>
+            </div>
+
+            {/* Custom progress loading bar */}
+            <div className="space-y-1.5">
+              <div className="flex justify-between text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">
+                <span>Analysis sequence</span>
+                <span>{Math.round(((analysisStep + 1) / 6) * 100)}%</span>
+              </div>
+              <div className="w-full bg-slate-950 h-2.5 rounded-full p-0.5 border border-slate-800 overflow-hidden">
+                <div 
+                  className="bg-gradient-to-r from-indigo-600 to-cyan-500 h-full rounded-full transition-all duration-300"
+                  style={{ width: `${((analysisStep + 1) / 6) * 100}%` }}
+                ></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Toast Notification */}
+      {toastMessage && (
+        <div className="fixed bottom-6 right-6 bg-emerald-600 text-white px-5 py-3.5 rounded-xl shadow-[0_4px_20px_rgba(16,185,129,0.4)] z-50 flex items-center gap-3 border border-emerald-500 animate-slide-up">
+          <div className="w-6 h-6 rounded-full bg-white/10 flex items-center justify-center font-bold text-sm">✓</div>
+          <span className="text-xs font-black tracking-tight">{toastMessage}</span>
         </div>
       )}
 

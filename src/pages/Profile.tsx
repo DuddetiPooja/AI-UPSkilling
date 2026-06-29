@@ -169,7 +169,7 @@ export const Profile: React.FC = () => {
                   <select
                     id="edit-mode"
                     value={aiMode}
-                    onChange={(e) => setAiMode(e.target.value)}
+                    onChange={(e) => setAiMode(e.target.value as 'Adaptive' | 'Fast-Track' | 'Deep-Dive')}
                     className="block w-full border border-slate-800 rounded-lg px-3.5 py-2.5 text-sm bg-slate-950 text-white focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 font-semibold"
                   >
                     <option value="Adaptive">Adaptive (Skip Knowns)</option>

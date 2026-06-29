@@ -51,12 +51,17 @@ export const Login: React.FC = () => {
     setError('');
 
     setTimeout(() => {
-      login(email);
-      setSuccess('Sign-in successful! Redirecting to dashboard...');
-      setIsSubmitting(false);
-      setTimeout(() => {
-        navigate('/dashboard');
-      }, 800);
+      const result = login(email, password);
+      if (result.success) {
+        setSuccess('Sign-in successful! Redirecting to dashboard...');
+        setIsSubmitting(false);
+        setTimeout(() => {
+          navigate('/dashboard');
+        }, 800);
+      } else {
+        setError(result.error || 'Authentication failed. Please verify credentials.');
+        setIsSubmitting(false);
+      }
     }, 1000);
   };
 

@@ -17,8 +17,8 @@ interface AppContextType {
   activities: ActivityItem[];
   badges: AchievementBadge[];
   isAuthenticated: boolean;
-  login: (email: string, name?: string) => void;
-  signup: (name: string, email: string) => void;
+  login: (email: string, password?: string) => { success: boolean; error?: string };
+  signup: (name: string, email: string, password?: string) => { success: boolean; error?: string };
   logout: () => void;
   updateProfile: (updates: Partial<UserProfile>) => void;
   submitAssessment: (assessment: AssessmentSubmission) => void;
@@ -1456,26 +1456,31 @@ const createRoadmapPhaseFromRecommendation = (rec: TechRecommendation, phaseNum:
   };
 };
 
-export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
-    return localStorage.getItem('apex_auth') === 'true';
-  });
+export interface UserCredential {
+  email: string;
+  name: string;
+  password?: string;
+  userProfile?: UserProfile;
+  skills?: SkillItem[];
+  recommendations?: TechRecommendation[];
+  roadmap?: RoadmapPhase[];
+  activities?: ActivityItem[];
+  badges?: AchievementBadge[];
+}
 
-  const [user, setUser] = useState<UserProfile | null>(() => {
-    const saved = localStorage.getItem('apex_user');
+export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [registeredUsers, setRegisteredUsers] = useState<UserCredential[]>(() => {
+    const saved = localStorage.getItem('apex_registered_users');
     if (saved) {
       try {
-        const parsed = JSON.parse(saved);
-        // Automatically upgrade existing default profile avatar for Pooja Duddeti to her custom image
-        if (parsed.email === 'poojaduddeti@gmail.com' || parsed.avatarUrl?.includes('images.unsplash.com')) {
-          parsed.avatarUrl = 'https://cdn.corenexis.com/f/iTV2S7Vhsqa.jpeg';
-        }
-        return parsed;
+        return JSON.parse(saved);
       } catch (e) {
         // Fallback below
       }
     }
-    return {
+    
+    // Pre-populate with our default registered user: Pooja Duddeti
+    const defaultPoojaProfile: UserProfile = {
       name: 'Pooja Duddeti',
       email: 'poojaduddeti@gmail.com',
       title: 'Solutions Engineer',
@@ -1490,6 +1495,42 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       targetHoursWeekly: 20,
       aiMode: 'Adaptive',
     };
+
+    return [
+      {
+        email: 'poojaduddeti@gmail.com',
+        name: 'Pooja Duddeti',
+        password: 'password',
+        userProfile: defaultPoojaProfile,
+        skills: initialSkills,
+        recommendations: initialRecommendations,
+        roadmap: initialRoadmap,
+        activities: initialActivities,
+        badges: initialBadges
+      }
+    ];
+  });
+
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
+    return localStorage.getItem('apex_auth') === 'true';
+  });
+
+  const [user, setUser] = useState<UserProfile | null>(() => {
+    const isAuth = localStorage.getItem('apex_auth') === 'true';
+    if (!isAuth) return null;
+    const saved = localStorage.getItem('apex_user');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed.email === 'poojaduddeti@gmail.com' || parsed.avatarUrl?.includes('images.unsplash.com')) {
+          parsed.avatarUrl = 'https://cdn.corenexis.com/f/iTV2S7Vhsqa.jpeg';
+        }
+        return parsed;
+      } catch (e) {
+        // Fallback
+      }
+    }
+    return null;
   });
 
   const [skills, setSkills] = useState<SkillItem[]>(() => {
@@ -1567,6 +1608,46 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Keep localStorage updated
   useEffect(() => {
+    localStorage.setItem('apex_registered_users', JSON.stringify(registeredUsers));
+  }, [registeredUsers]);
+
+  // Sync active user states back to registeredUsers in localStorage
+  useEffect(() => {
+    if (user) {
+      setRegisteredUsers(prev => {
+        const index = prev.findIndex(u => u.email.toLowerCase().trim() === user.email.toLowerCase().trim());
+        if (index === -1) return prev;
+        
+        const existing = prev[index];
+        if (
+          existing.name === user.name &&
+          JSON.stringify(existing.userProfile) === JSON.stringify(user) &&
+          JSON.stringify(existing.skills) === JSON.stringify(skills) &&
+          JSON.stringify(existing.recommendations) === JSON.stringify(recommendations) &&
+          JSON.stringify(existing.roadmap) === JSON.stringify(roadmap) &&
+          JSON.stringify(existing.activities) === JSON.stringify(activities) &&
+          JSON.stringify(existing.badges) === JSON.stringify(badges)
+        ) {
+          return prev;
+        }
+
+        const updated = [...prev];
+        updated[index] = {
+          ...existing,
+          name: user.name,
+          userProfile: user,
+          skills,
+          recommendations,
+          roadmap,
+          activities,
+          badges
+        };
+        return updated;
+      });
+    }
+  }, [user, skills, recommendations, roadmap, activities, badges]);
+
+  useEffect(() => {
     localStorage.setItem('apex_auth', String(isAuthenticated));
     if (user) {
       localStorage.setItem('apex_user', JSON.stringify(user));
@@ -1576,24 +1657,34 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [isAuthenticated, user]);
 
   useEffect(() => {
-    localStorage.setItem('apex_skills', JSON.stringify(skills));
-  }, [skills]);
+    if (user) {
+      localStorage.setItem('apex_skills', JSON.stringify(skills));
+    }
+  }, [skills, user]);
 
   useEffect(() => {
-    localStorage.setItem('apex_recommendations', JSON.stringify(recommendations));
-  }, [recommendations]);
+    if (user) {
+      localStorage.setItem('apex_recommendations', JSON.stringify(recommendations));
+    }
+  }, [recommendations, user]);
 
   useEffect(() => {
-    localStorage.setItem('apex_roadmap', JSON.stringify(roadmap));
-  }, [roadmap]);
+    if (user) {
+      localStorage.setItem('apex_roadmap', JSON.stringify(roadmap));
+    }
+  }, [roadmap, user]);
 
   useEffect(() => {
-    localStorage.setItem('apex_activities', JSON.stringify(activities));
-  }, [activities]);
+    if (user) {
+      localStorage.setItem('apex_activities', JSON.stringify(activities));
+    }
+  }, [activities, user]);
 
   useEffect(() => {
-    localStorage.setItem('apex_badges', JSON.stringify(badges));
-  }, [badges]);
+    if (user) {
+      localStorage.setItem('apex_badges', JSON.stringify(badges));
+    }
+  }, [badges, user]);
 
   const addActivity = (title: string, type: ActivityItem['type'], points: number) => {
     const newActivity: ActivityItem = {
@@ -1606,11 +1697,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setActivities(prev => [newActivity, ...prev.slice(0, 19)]);
   };
 
-  const login = (email: string, name?: string) => {
+  const login = (email: string, password?: string): { success: boolean; error?: string } => {
+    const normalizedEmail = email.toLowerCase().trim();
+    const existingUser = registeredUsers.find(u => u.email.toLowerCase().trim() === normalizedEmail);
+    
+    if (!existingUser) {
+      return { success: false, error: 'Account does not exist. Please sign up first.' };
+    }
+    
+    if (password && existingUser.password && existingUser.password !== password) {
+      return { success: false, error: 'Incorrect password. Please try again.' };
+    }
+    
+    // Success! Log them in.
     setIsAuthenticated(true);
-    const mockUser: UserProfile = {
-      name: name || 'Pooja Duddeti',
-      email: email,
+    
+    // Load their specific user profile and progress, or use default if none saved yet
+    const loadedUser: UserProfile = existingUser.userProfile || {
+      name: existingUser.name,
+      email: existingUser.email,
       title: 'Solutions Engineer',
       avatarUrl: 'https://cdn.corenexis.com/f/iTV2S7Vhsqa.jpeg',
       careerGoal: 'Sr. Solutions Architect',
@@ -1623,12 +1728,28 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       targetHoursWeekly: 20,
       aiMode: 'Adaptive',
     };
-    setUser(mockUser);
+    
+    setUser(loadedUser);
+    
+    // Load other states if they have progress, otherwise load defaults
+    if (existingUser.skills) setSkills(existingUser.skills);
+    if (existingUser.recommendations) setRecommendations(existingUser.recommendations);
+    if (existingUser.roadmap) setRoadmap(existingUser.roadmap);
+    if (existingUser.activities) setActivities(existingUser.activities);
+    if (existingUser.badges) setBadges(existingUser.badges);
+    
     addActivity('User logged in securely', 'login', 10);
+    return { success: true };
   };
 
-  const signup = (name: string, email: string) => {
-    setIsAuthenticated(true);
+  const signup = (name: string, email: string, password?: string): { success: boolean; error?: string } => {
+    const normalizedEmail = email.toLowerCase().trim();
+    const existingUser = registeredUsers.find(u => u.email.toLowerCase().trim() === normalizedEmail);
+    
+    if (existingUser) {
+      return { success: false, error: 'An account with this email already exists. Please sign in instead.' };
+    }
+    
     const newUser: UserProfile = {
       name,
       email,
@@ -1644,16 +1765,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       targetHoursWeekly: 15,
       aiMode: 'Adaptive',
     };
-    setUser(newUser);
-    // Reset data for new user to showcase progress from scratch
-    setSkills([
+
+    // New default state for skills, roadmap, badges, recommendations
+    const defaultSkills: SkillItem[] = [
       { id: '1', name: 'Docker & Containerization', category: 'Cloud Engineering', currentMatch: 15, requiredLevel: 80, status: 'Critical Missing' },
       { id: '2', name: 'Kubernetes Orchestration', category: 'Cloud Engineering', currentMatch: 5, requiredLevel: 80, status: 'Critical Missing' },
       { id: '3', name: 'Terraform (IaC)', category: 'Cloud Engineering', currentMatch: 0, requiredLevel: 75, status: 'Critical Missing' },
       { id: '4', name: 'AWS Solutions Architecture', category: 'Cloud Engineering', currentMatch: 10, requiredLevel: 80, status: 'Critical Missing' },
       { id: '5', name: 'Node.js & Express API Development', category: 'Backend & System Design', currentMatch: 40, requiredLevel: 80, status: 'Gap Identified' },
       { id: '6', name: 'Database Design & SQL', category: 'Backend & System Design', currentMatch: 30, requiredLevel: 80, status: 'Gap Identified' },
-    ]);
+    ];
+
     const resetRecs = [...initialRecommendations];
     interestOptions.forEach((interest, idx) => {
       const rec = mapInterestToRecommendation(interest, `rec-interest-${idx}`);
@@ -1661,23 +1783,58 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         resetRecs.push(rec);
       }
     });
-    setRecommendations(resetRecs.map(r => ({ ...r, enrolled: false })));
-    setRoadmap(initialRoadmap.map((p, idx) => ({
+    const defaultRecommendations = resetRecs.map(r => ({ ...r, enrolled: false }));
+
+    const defaultRoadmap = initialRoadmap.map((p, idx) => ({
       ...p,
       status: idx === 0 ? 'In Progress' : 'Locked',
       sessions: p.sessions.map(s => ({ ...s, completed: false }))
-    })));
-    setBadges(initialBadges.map(b => ({ ...b, unlocked: false })));
-    setActivities([
+    })) as RoadmapPhase[];
+
+    const defaultBadges = initialBadges.map(b => ({ ...b, unlocked: false }));
+    const defaultActivities: ActivityItem[] = [
       { id: 'a-su', title: 'Created AI Upskilling Profile', timestamp: 'Just now', type: 'login', points: 100 }
-    ]);
+    ];
+
+    const newCred: UserCredential = {
+      email,
+      name,
+      password,
+      userProfile: newUser,
+      skills: defaultSkills,
+      recommendations: defaultRecommendations,
+      roadmap: defaultRoadmap,
+      badges: defaultBadges,
+      activities: defaultActivities
+    };
+
+    setRegisteredUsers(prev => [...prev, newCred]);
+    setIsAuthenticated(true);
+    setUser(newUser);
+    setSkills(defaultSkills);
+    setRecommendations(defaultRecommendations);
+    setRoadmap(defaultRoadmap);
+    setBadges(defaultBadges);
+    setActivities(defaultActivities);
+
+    return { success: true };
   };
 
   const logout = () => {
     setIsAuthenticated(false);
     setUser(null);
+    setSkills([]);
+    setRoadmap([]);
+    setRecommendations([]);
+    setBadges([]);
+    setActivities([]);
     localStorage.removeItem('apex_auth');
     localStorage.removeItem('apex_user');
+    localStorage.removeItem('apex_skills');
+    localStorage.removeItem('apex_roadmap');
+    localStorage.removeItem('apex_recommendations');
+    localStorage.removeItem('apex_badges');
+    localStorage.removeItem('apex_activities');
   };
 
   const updateProfile = (updates: Partial<UserProfile>) => {

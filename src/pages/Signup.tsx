@@ -61,12 +61,17 @@ export const Signup: React.FC = () => {
     setError('');
 
     setTimeout(() => {
-      signup(fullName, email);
-      setSuccess('Account created successfully! Preparing your custom workspace...');
-      setIsSubmitting(false);
-      setTimeout(() => {
-        navigate('/assessment'); // Send to assessment first for adaptive upskilling!
-      }, 1000);
+      const result = signup(fullName, email, password);
+      if (result.success) {
+        setSuccess('Account created successfully! Preparing your custom workspace...');
+        setIsSubmitting(false);
+        setTimeout(() => {
+          navigate('/assessment'); // Send to assessment first for adaptive upskilling!
+        }, 1000);
+      } else {
+        setError(result.error || 'Account creation failed. Please try again.');
+        setIsSubmitting(false);
+      }
     }, 1200);
   };
 
